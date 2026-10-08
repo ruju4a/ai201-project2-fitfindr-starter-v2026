@@ -306,14 +306,42 @@ that produced it:
 **Happy path**
 
 ```
-
+$ python app.py ask 'vintage graphic tee under $30' --trace
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+[2] suggest_outfit
+      in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      out: Here are two specific outfit ideas using the new Y2K baby tee and pieces from their existing wardrobe:  **Outf…
+      →    wardrobe: 10 item(s)
+[3] create_fit_card
+      in:  Here are two specific outfit ideas using the new Y2K baby tee and pieces from their existing wardrobe:  **Outf…
+      out: Found this cute Y2K baby tee on depop for just $18, and it's giving major early-2000s mall-goth nostalgia. I'm…
 ```
 
 **Empty search**
 
 ```
+$ python app.py ask 'designer ballgown size XXS under $5' --trace
+[1] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: [] (empty)
+[2] branch
+      →    search_results empty — stopping before suggest_outfit
 
+  No listings matched — try raising max_price or dropping the size filter.
 ```
+
+The empty-search trace stops at step 2 — the branch — instead of continuing to
+`suggest_outfit` and `create_fit_card` the way the happy path does.
+
+**On the MCP move:** `search_listings` is now called through
+`mcp_client.call_tool("search_listings", ...)` in `agent.py::run_agent`
+instead of being imported directly from `tools.py`. The trace step is
+labeled `search_listings (via MCP)` so the MCP hop is visible in the trace
+itself, not just in the source. Behavior was unchanged — the happy-path and
+empty-search example runs produced byte-identical output before and after
+the move.
 
 **On the MCP move:** <!-- what changed in your code, and whether anything
 behaved differently afterwards. If the rewire didn't work, say exactly where it
