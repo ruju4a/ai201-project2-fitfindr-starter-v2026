@@ -56,7 +56,7 @@ def call_tool(name: str, arguments: dict):
         MCPError, with something readable in it.
     """
     try:
-        return asyncio.run(_call(name, arguments))
+        outcome = asyncio.run(_call(name, arguments))
     except MCPError:
         raise
     except Exception as exc:  # noqa: BLE001 — re-raised readably below
@@ -67,8 +67,25 @@ def call_tool(name: str, arguments: dict):
             f"If it exits immediately with an error, fix that before coming back here."
         ) from exc
 
+    if not outcome["ok"]:
+        raise MCPError(outcome["error"])
+    return outcome["value"]
 
-async def _call(name: str, arguments: dict):
+
+async def _call(name: str, arguments: dict) -> dict:
+    """
+    Returns {"ok": True, "value": ...} or {"ok": False, "error": <message>}.
+
+    This never raises MCPError itself, even when the tool call fails — only
+    returns a plain dict. Raising while the `async with` blocks below are
+    still open gets re-wrapped by anyio into an opaque ExceptionGroup that
+    throws away the original message (found by testing a tool that raises
+    an exception, e.g. a model-unavailable error, through this client —
+    `search_listings` never exercises this path, since it only ever returns
+    a list, so the bug was invisible until a second, model-calling tool
+    moved onto MCP). `call_tool` does the actual raising, after `asyncio.run`
+    has returned and the connection is fully closed.
+    """
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
@@ -83,18 +100,24 @@ async def _call(name: str, arguments: dict):
 
             available = {t.name for t in (await session.list_tools()).tools}
             if name not in available:
-                raise MCPError(
-                    f"The server doesn't offer a tool called '{name}'.\n"
-                    f"It offers: {', '.join(sorted(available)) or '(nothing yet)'}\n"
-                    f"Register your tool in mcp_server.py — that's Milestone 1."
-                )
+                return {
+                    "ok": False,
+                    "error": (
+                        f"The server doesn't offer a tool called '{name}'.\n"
+                        f"It offers: {', '.join(sorted(available)) or '(nothing yet)'}\n"
+                        f"Register your tool in mcp_server.py — that's Milestone 1."
+                    ),
+                }
 
             result = await session.call_tool(name, arguments)
 
             if getattr(result, "isError", False):
-                raise MCPError(f"The tool '{name}' returned an error: {_text(result)}")
+                return {
+                    "ok": False,
+                    "error": f"The tool '{name}' returned an error: {_text(result)}",
+                }
 
-            return _unwrap(result)
+            return {"ok": True, "value": _unwrap(result)}
 
 
 def _unwrap(result):

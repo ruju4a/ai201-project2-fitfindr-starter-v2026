@@ -17,8 +17,8 @@ import re
 
 import config
 import trace
-from mcp_client import call_tool
-from tools import suggest_outfit, create_fit_card
+from mcp_client import call_tool, MCPError
+from tools import suggest_outfit
 from generate import ModelUnavailable
 
 
@@ -189,18 +189,23 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
         count += 1
         trace.check_iterations(count)
-        session["fit_card"] = create_fit_card(
-            session["outfit_suggestion"], session["selected_item"]
-        )
+        session["fit_card"] = call_tool("create_fit_card", {
+            "outfit": session["outfit_suggestion"],
+            "new_item": session["selected_item"],
+        })
         trace.step(
-            "create_fit_card",
+            "create_fit_card (via MCP)",
             inputs=session["outfit_suggestion"],
             returned=session["fit_card"],
             note=f"item: {session['selected_item']['title']}",
         )
-    except ModelUnavailable as exc:
+    except (ModelUnavailable, MCPError) as exc:
+        # suggest_outfit raises ModelUnavailable directly; create_fit_card
+        # goes through MCP, so the same failure arrives as MCPError instead
+        # (mcp_client.call_tool re-raises whatever the server reports as a
+        # tool error under that type, not the original exception class).
         session["error"] = str(exc)
-        trace.step("model call", note=f"ModelUnavailable — stopping: {exc}")
+        trace.step("model call", note=f"{type(exc).__name__} — stopping: {exc}")
 
     return session
 

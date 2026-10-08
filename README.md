@@ -406,9 +406,10 @@ $ python app.py ask 'vintage graphic tee under $30' --trace
       in:  Y2K Baby Tee — Butterfly Print ($18.0, depop)
       out: Here are two specific outfit ideas using the new Y2K baby tee and pieces from their existing wardrobe:  **Outf…
       →    wardrobe: 10 item(s)
-[3] create_fit_card
+[3] create_fit_card (via MCP)
       in:  Here are two specific outfit ideas using the new Y2K baby tee and pieces from their existing wardrobe:  **Outf…
       out: Found this cute Y2K baby tee on depop for just $18, and it's giving major early-2000s mall-goth nostalgia. I'm…
+      →    item: Y2K Baby Tee — Butterfly Print
 ```
 
 **Empty search**
@@ -435,10 +436,43 @@ itself, not just in the source. Behavior was unchanged — the happy-path and
 empty-search example runs produced byte-identical output before and after
 the move.
 
-**Stretch feature, declared before starting:** moving a second tool onto
+**Stretch feature, declared before starting:** moved a second tool onto
 MCP — `create_fit_card`, the last tool in the pipeline. `suggest_outfit`
 stays a direct call, so the seam between MCP and direct calls is still
-visible in the loop.
+visible in the loop. Registered in `mcp_server.py` the same way as
+`search_listings`: name, a description written for an outside reader
+(stating units, the required `title`/`price`/`platform` keys on `new_item`,
+and the exact fixed string returned for an empty `outfit`), and typed
+inputs matching the Tool Inventory. `agent.py::run_agent` now calls it via
+`call_tool("create_fit_card", {...})` instead of importing it directly.
+
+**A real bug found by making this move, not a hypothetical one:**
+`create_fit_card` is the first MCP-routed tool that can actually *fail*
+(`search_listings` never raises — it always returns a list, even an empty
+one). Testing that failure path — a corrupted API key, the same check from
+Milestone 2 — surfaced a genuine bug in the given `mcp_client.py` plumbing:
+`_call()` raised `MCPError` from inside the still-open
+`async with stdio_client(...)` / `async with ClientSession(...)` blocks,
+and anyio's TaskGroup machinery re-wrapped that into an opaque
+`ExceptionGroup` ("unhandled errors in a TaskGroup (1 sub-exception)"),
+throwing away the actual message ("The model rejected your API key...").
+Confirmed with a toy MCP server that *any* tool error raised that way gets
+mangled the same way — it isn't specific to this tool or to the Google
+GenAI SDK.
+
+**The fix:** `_call()` no longer raises — it returns a plain
+`{"ok": bool, ...}` dict, and `call_tool()` does the actual `raise
+MCPError(...)` afterward, once `asyncio.run()` has returned and the
+connection is fully closed. Re-verified all three paths directly against
+`mcp_client.call_tool`: a successful call, a call to a tool that doesn't
+exist, and a real call that fails with a corrupted key — all three now
+behave correctly, with the last one producing the full original message
+instead of the opaque wrapper. `agent.py::run_agent`'s except clause now
+catches `(ModelUnavailable, MCPError)` together, since the same real
+failure now arrives as `ModelUnavailable` from `suggest_outfit` (direct
+call) but as `MCPError` from `create_fit_card` (MCP call) — re-ran the
+full bad-key failure mode through `app.py ask ... --trace` afterward to
+confirm it still stops cleanly, exit code 0, no crash.
 
 ---
 

@@ -60,6 +60,7 @@ works with a direct call, and **a documented failure earns the point in full.**
 from mcp.server.fastmcp import FastMCP
 
 from tools import search_listings as _search_listings_impl  # noqa: F401 — you'll use this below
+from tools import create_fit_card as _create_fit_card_impl
 
 # log_level="WARNING" keeps the server from printing an INFO line for every
 # request. Without it your terminal fills with "Processing request of type
@@ -83,6 +84,22 @@ def search_listings(
     list, never null or an error, when nothing matches.
     """
     return _search_listings_impl(description, size, max_price)
+
+
+@mcp.tool()
+def create_fit_card(outfit: str, new_item: dict) -> str:
+    """
+    Write a short, shareable caption (2 to 4 sentences) about a thrifted
+    item someone is considering, in the voice of a real social post rather
+    than a product listing — given an outfit-idea string (e.g. from an
+    outfit-suggestion tool) and the item as a dict with at least `title`,
+    `price` (a number, in US dollars), and `platform` keys. Mentions the
+    item, its price, and its platform exactly once each. If `outfit` is
+    empty or whitespace-only, returns the fixed string "Can't create a fit
+    card without an outfit suggestion." instead of calling a model or
+    raising an error.
+    """
+    return _create_fit_card_impl(outfit, new_item)
 #
 # Two notes on the block above.
 #
