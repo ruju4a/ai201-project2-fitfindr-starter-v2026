@@ -344,15 +344,42 @@ all 5 tries: `search_results: 3`, `selected_item: Vintage Levi's 501 Jeans — M
 
 | # | Criterion | Target | Verdict | How I decided |
 |---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
+| 1 | Full three-tool run returns a fit card | 4 of 5 | MET (5/5) | All 5 tries in the "matching query completes" scenario show `stopped early: no` and a non-empty fit card in `results/run_2026-10-07_2117_before.md`. 5 passes clears the 4-of-5 bar with one to spare. |
+| 2 | Empty search stops before tool 2 | 5 of 5 | MET (5/5) | All 5 tries show `stopped early: yes`, `search_results: 0`, `selected_item: (none)`, and the named-change message — never the fit card. |
+| 3 | Item in session matches item passed on | 5 of 5 | MET (5/5) | A spy standing in for `suggest_outfit` recorded the id it actually received on 5 separate runs; compared against `session["selected_item"]["id"]` each time, all 5 matched. |
+| 4 | Fit card mentions price/platform, 2-4 sentences | 5 of 5 | MET (5/5) | Read all 5 caption texts by hand: every one names the price ($18 or $18.0) and the platform (depop/Depop), and runs 2-3 sentences — inside the 2-4 range every time, with different wording each try. |
+| 5 | Price ceiling respected | 5 of 5 (≥3 ceilings) | MET (5/5) | Checked `search_listings` directly at 5 different price ceilings ($15/$28/$35/$40/$60) — every returned listing's price was ≤ its ceiling — plus one full-loop rerun at $40, consistent across all 5 tries. |
 
 **Diagnoses**
 
+Nothing missed this run, so there's nothing to trace to a tool, a branch, the
+session, or the model's output — but "nothing missed" isn't the same as
+"every target was well-chosen," and it's worth being honest about which ones
+actually earned their pass.
 
+- **Criteria 2, 3, and 5** are checking deterministic code (the branch, the
+  session plumbing, the price filter) with no model involved. A 5/5 there
+  isn't luck — there's no mechanism by which they'd ever come out otherwise
+  unless the code itself were broken. These targets are appropriately tight
+  (5 of 5) and the passes are meaningful.
+- **Criterion 4** targets 5 of 5 on model output and got it — the prompt's
+  structural instructions (mention price, mention platform, stay 2-4
+  sentences) held across 5 independent generations. That's a real signal
+  about prompt reliability, not a guaranteed outcome.
+- **Criterion 1 is the one I'd tighten.** I set its target at 4 of 5
+  specifically because I expected *keyword-matching* misses — a matching
+  query phrased in a way that doesn't share vocabulary with the listing
+  data. But `run_eval.py` reruns the exact same query text 5 times, and
+  `search_listings` is deterministic: the same query will always produce
+  the same keyword overlap, every time. So this scenario, as built, can
+  only ever show 5/5 or 0/5 — it was never actually capable of landing on
+  3/5 or 4/5, which means the slack I built into the target was never
+  being exercised by this test. If I were tightening one thing, I'd either
+  raise this target to 5 of 5 (since the deterministic parts can't
+  legitimately produce a partial score) or change the scenario to run 5
+  *different* phrasings of a matching query instead of rerunning one — the
+  second option is the one that would actually test what I originally
+  meant by "some phrasings will miss."
 
 ---
 
