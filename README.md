@@ -224,6 +224,45 @@ Scored these vintage Levi's 501 jeans for just $38.0 on depop and I am officiall
   the cache working as designed while building, not a problem with
   `create_fit_card` itself.
 
+**Moment 3 (unit 4)**
+
+- *What I asked for:* To run the Before test (`run_eval.py --label before`)
+  and build the Run Log. Criterion 1 came back 5/5 — a clean pass I almost
+  just accepted.
+- *What came back:* A pushback on the number itself: `run_eval.py` reruns
+  one scenario's exact query text 5 times, but `search_listings` is
+  deterministic, so that setup could only ever land on 5/5 or 0/5 — it
+  could never actually test "some phrasings will miss," which is what the
+  4-of-5 target was written around. 5/5 wasn't evidence the search was
+  reliable; it was evidence the test couldn't measure what it claimed to.
+- *What I changed:* Revised criterion 1's test (not its target) to run 5
+  different realistic phrasings once each instead of rerunning one. That
+  surfaced a real miss (3/5, pre-fix) — "trainers for walking" and
+  "footwear for everyday" both matched zero listings, despite four shoe
+  listings existing, because neither word appears in that data. Fixed with
+  a small category-synonym addition in `tools.py`, scoped to exactly that
+  gap, then re-measured: 5/5.
+
+**Moment 4 (unit 4)**
+
+- *What I asked for:* To move a second tool (`create_fit_card`) onto MCP as
+  a stretch feature, then re-verify the model-unavailable failure mode
+  against it, the same corrupted-key check from Milestone 2.
+- *What came back:* A crash — not the readable "model rejected your API
+  key" message, but an opaque `"unhandled errors in a TaskGroup (1
+  sub-exception)"`. Rather than accept that as expected MCP weirdness, it
+  traced the cause into the *given* `mcp_client.py`: raising `MCPError`
+  while the async connection was still open was getting re-wrapped by
+  anyio's cleanup machinery, destroying the original message. Confirmed
+  with a disposable toy MCP server that this happens for any tool error
+  raised that way, not something specific to this tool.
+- *What I changed:* Had `mcp_client.py`'s `_call()` return a plain result
+  dict instead of raising, moving the actual `raise MCPError(...)` to
+  `call_tool()`, after the connection is fully closed. I verified this
+  myself against three paths (a successful call, a nonexistent tool, and a
+  real corrupted-key failure) before accepting the fix, rather than taking
+  "it works now" on faith.
+
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
      Don't fill these in during unit 3.
