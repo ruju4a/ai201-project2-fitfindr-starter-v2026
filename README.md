@@ -549,11 +549,32 @@ meant to address.
 
 ## What's Still Broken
 
-<!-- For each criterion still missed: what you'd do, and why you stopped where
-     you did. "I ran out of time" is fine if it's true. Pretending nothing is
-     left is not. -->
+**Criterion 4 (fit card mentions price/platform, 2-4 sentences) — missed 4/5
+in the After run.** The miss was try 2 hitting a real 503 "model currently
+experiencing high demand" error from the Gemini API, which left
+`session["fit_card"]` as `None` for that try. Root cause, named precisely:
+`generate.py`'s retry loop only treats 429/"rate limit" messages as
+retryable (`_retry_delay`'s `rate_limited` check) — a 503 is raised
+immediately as `ModelUnavailable`, with zero retries, even though the
+provider's own message calls it a temporary spike.
 
+**What I'd do:** widen that check to also retry on 503/"UNAVAILABLE"/
+"overloaded", with the same exponential backoff already used for 429s. It's
+a small, contained change — same shape and size as the shoe-synonym fix
+already made this unit.
 
+**Why I stopped instead of making it:** this unit allows exactly one
+improvement, and it was already spent on criterion 1's keyword-matching gap.
+A second fix is only allowed as a declared stretch feature, said in the
+README before starting it — I didn't declare one, so I'm leaving this
+documented rather than quietly sneaking in a second change. This isn't "ran
+out of time" — I know the fix and could make it in a few minutes — it's a
+scope decision, made on purpose.
+
+**Everything else (criteria 1, 2, 3, 5): MET in both Before and After**, and
+nothing in either run pointed at a problem worth fixing beyond the two
+findings above (the shoe-synonym gap, now fixed, and the 503-retry gap,
+documented here).
 
 <!-- ═════════════════════════════════════════════════════════════════════
 
