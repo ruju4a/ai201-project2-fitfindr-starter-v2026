@@ -435,13 +435,6 @@ itself, not just in the source. Behavior was unchanged — the happy-path and
 empty-search example runs produced byte-identical output before and after
 the move.
 
-**On the MCP move:** <!-- what changed in your code, and whether anything
-behaved differently afterwards. If the rewire didn't work, say exactly where it
-broke — the error text and the last thing that worked. That earns the point in
-full. -->
-
-
-
 ---
 
 ## The Improvement
@@ -451,21 +444,101 @@ full. -->
 
      `python run_eval.py --label after` -->
 
-**What I changed:**
+**What I changed:** Added a small category-synonym table to
+`tools.py::_listing_text` (`_CATEGORY_SYNONYMS`), scoped to exactly the gap
+found in testing: for listings in the `"shoes"` category, the words
+`"footwear"`, `"trainers"`, `"sneaker"`, and `"shoe"` are now included in the
+text `search_listings` scores keyword overlap against, alongside the
+title/description/category/style_tags/colors that were already there. No
+other category got a synonym table — only the one the diagnosis actually
+found broken.
 
-**Which failure it was meant to fix:**
+**Which failure it was meant to fix:** Criterion 1, diagnosed in Milestone 4.
+Once the test was corrected to use 5 different realistic phrasings instead
+of rerunning one, it surfaced a real miss (3/5, pre-fix): `"trainers for
+walking"` and `"footwear for everyday"` both returned zero results from
+`search_listings`, even though the catalog has four shoe listings, because
+neither word ever appears in those listings' title, description, or
+style_tags — plain keyword overlap has no way to know "trainers" means
+"sneakers."
 
-### Run Log — After
+**Before (pre-fix), criterion 1 only — 5 different phrasings, one try each,**
+`tools.py::search_listings` (direct calls, no model):
+
+```
+'vintage graphic tee'        -> 10 results, top: Y2K Baby Tee — Butterfly Print
+'a nice pair of jeans'       -> 3 results,  top: Vintage Levi's 501 Jeans — Medium Wash
+'90s track jacket'           -> 10 results, top: 90s Track Jacket — Navy/White Stripe
+'trainers for walking'       -> 0 results  (NO MATCH)
+'footwear for everyday'      -> 0 results  (NO MATCH)
+```
+3/5 — MISSED against the 4-of-5 target.
+
+**After (post-fix), same 5 phrasings, run through the full loop,**
+`agent.py::run_agent`:
+
+```
+PASS: 'vintage graphic tee under $30'      -> item='Y2K Baby Tee — Butterfly Print'
+PASS: 'a nice pair of jeans under $40'     -> item="Vintage Levi's 501 Jeans — Medium Wash"
+PASS: '90s track jacket in size M'         -> item='90s Track Jacket — Navy/White Stripe'
+PASS: 'trainers for walking under $50'     -> item='Platform Sneakers — White Chunky Sole'
+PASS: 'footwear for everyday under $50'    -> item='Platform Sneakers — White Chunky Sole'
+5/5 passed
+```
+5/5 — MET, and this time the number means something: the test can actually
+land anywhere from 0/5 to 5/5 depending on phrasing, and it came out on top
+because the specific gap found was fixed, not because the test is incapable
+of failing.
+
+### Run Log — After (criteria 2–5, full suite rerun)
+
+Produced by `run_eval.py::main`, full report committed at
+`results/run_2026-10-07_2131_after.md` (42 model calls, 9988 prompt + 7625
+output tokens).
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Full three-tool run returns a fit card (5 phrasings — see above) | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. Empty search stops before tool 2 | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. Item in session matches item passed on | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card mentions price/platform, 2-4 sentences | 5 of 5 | PASS | **FAIL** | PASS | PASS | PASS | MISSED (4/5) |
+| 5. Price ceiling respected | 5 of 5 (≥3 ceilings) | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
-**Did it help, and how do I know:**
+This run happened to land during a stretch of **real 503 "model currently
+experiencing high demand" errors** from the Gemini API — 10 of the 30 model-
+calling tries across all scenarios in this run hit one. That's not something
+I caused or could control, and it's not what the unit 4 "model unavailable"
+failure mode normally simulates (a bad key) — it's the same `ModelUnavailable`
+path, triggered by a real transient outage instead of a corrupted key.
+
+**Criterion 3** still came back 5/5 despite two of its tries hitting a 503,
+because the state criterion only asks whether the same item reached
+`suggest_outfit` — and it did, in both cases, before the model call itself
+failed. `session["selected_item"]` is passed into `suggest_outfit` as a
+plain Python argument before `generate()` ever runs, so a failure inside the
+model call can't retroactively change what was passed in.
+
+**Criterion 4 genuinely missed (4/5)**, and this is a real diagnosis, not a
+dismissal: try 2's `create_fit_card` call hit the 503, so `session["fit_card"]`
+stayed `None` for that try — no caption was produced to check against the
+"mentions price and platform, 2-4 sentences" rule at all. The other 4 tries
+all passed cleanly (checked by hand, same as the before run). The mechanism
+here is `generate.py`'s retry logic: `_retry_delay`'s `rate_limited` check
+only matches 429/"rate limit" messages, so a 503 is raised as
+`ModelUnavailable` immediately, with no retry — reasonable for a bad API key
+(retrying forever is wrong), but it means a transient, recoverable outage is
+currently treated the same as a permanent one. That's a real, separate
+finding — see **What's Still Broken**.
+
+**Did it help, and how do I know:** Yes, on the thing it targeted. The real
+test for criterion 1 (5 different phrasings, not 5 reruns of one) went from
+3/5 to 5/5 after adding the shoe-category synonyms — a measured improvement
+on the actual failure found, not a guess. Criteria 2, 3, and 5 are unaffected
+by the change in principle (none of them touch `_listing_text` or the shoes
+category) and stayed at 5/5. Criterion 4's miss this run is unrelated to the
+fix — same prompt, same tool, no code touched there — and traces to a
+transient external outage rather than anything the improvement broke or was
+meant to address.
 
 <!-- If it made things worse, say that. Honestly reported, that earns full
      credit and is more interesting than one that worked. -->

@@ -54,12 +54,23 @@ def _size_tokens(size: str) -> set[str]:
     return {p.strip().upper() for p in cleaned.split("/") if p.strip()}
 
 
+# Common words a shopper uses that never appear in the data itself. Scoped to
+# exactly the gap found in unit 4 testing ("trainers", "footwear" both missed
+# every shoe listing) rather than a general-purpose synonym table — expand
+# this if testing finds another specific category word the data never uses.
+_CATEGORY_SYNONYMS = {
+    "shoes": ["footwear", "trainers", "sneaker", "shoe"],
+}
+
+
 def _listing_text(listing: dict) -> str:
     """Everything in a listing worth matching keywords against."""
+    category = listing.get("category", "")
     return " ".join([
         listing.get("title", ""),
         listing.get("description", ""),
-        listing.get("category", ""),
+        category,
+        " ".join(_CATEGORY_SYNONYMS.get(category, [])),
         " ".join(listing.get("style_tags") or []),
         " ".join(listing.get("colors") or []),
     ])

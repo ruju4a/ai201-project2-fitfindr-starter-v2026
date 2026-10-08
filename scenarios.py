@@ -15,11 +15,18 @@ own criteria need — these are a starting point, not a fixed set.
 
 SCENARIOS = [
     {
-        # A query the data can match. Criterion 1.
-        "name": "matching query completes",
+        # A query the data can match — rerun 5 times by run_eval. Kept as a
+        # sanity check (completes without crashing), but demoted from
+        # criterion 1: search_listings is deterministic, so rerunning this
+        # exact text 5 times can only ever show 5/5 or 0/5 — it can't
+        # exercise the "some phrasings will miss" risk the criterion is
+        # actually about. See criteria.md's revision note under criterion 1
+        # and the Loop Trace / Improvement sections in the README for the
+        # real criterion-1 evidence (5 different phrasings, run once each).
+        "name": "matching query completes (sanity check, not criterion 1)",
         "query": "vintage graphic tee under $30",
         "wardrobe": "example",
-        "criterion": 1,
+        "criterion": None,
     },
     {
         # A query nothing can match. Criterion 2 — the branch.

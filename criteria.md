@@ -33,6 +33,23 @@ deterministic code, so I'm not using this number to excuse a flaky
 `suggest_outfit` or `create_fit_card` — the looseness is specifically about
 keyword matching, nothing downstream of it.
 
+> **Revised in unit 4, Milestone 4:** The "before" test for this criterion
+> reran the exact string `"vintage graphic tee under $30"` five times.
+> `search_listings` is deterministic, so that could only ever produce 5/5 or
+> 0/5 — it never actually exercised the "some phrasings will miss" risk the
+> target was written around, and came back a trivial 5/5. Revised the test
+> (not the target) to run 5 *different* realistic phrasings of a matching
+> query, once each, instead of one phrasing five times:
+>
+> `"vintage graphic tee under $30"`, `"a nice pair of jeans under $40"`,
+> `"90s track jacket in size M"`, `"trainers for walking under $50"`,
+> `"footwear for everyday under $50"`.
+>
+> **Why revised:** The criterion itself was fine; the test design made it
+> impossible to measure what it claimed to measure. Under the corrected
+> test, pre-fix, the result was 3/5 — a real miss, not a hypothetical one
+> (see the Improvement section in the README).
+
 ---
 
 ## 2. An impossible query stops before the second tool
