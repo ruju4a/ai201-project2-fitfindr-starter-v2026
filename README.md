@@ -435,6 +435,11 @@ itself, not just in the source. Behavior was unchanged — the happy-path and
 empty-search example runs produced byte-identical output before and after
 the move.
 
+**Stretch feature, declared before starting:** moving a second tool onto
+MCP — `create_fit_card`, the last tool in the pipeline. `suggest_outfit`
+stays a direct call, so the seam between MCP and direct calls is still
+visible in the loop.
+
 ---
 
 ## The Improvement
