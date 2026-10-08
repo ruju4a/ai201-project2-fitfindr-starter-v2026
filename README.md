@@ -242,20 +242,85 @@ Scored these vintage Levi's 501 jeans for just $38.0 on depop and I am officiall
      `python run_eval.py --label before` runs everything and writes the table
      into results/. Paste it here and fill in the verdicts. -->
 
+Produced by `run_eval.py::main`, full report committed at
+`results/run_2026-10-07_2117_before.md` (53 model calls, 15606 prompt +
+10523 output tokens). Criterion 5's scenario runs the full agent loop on one
+query; the "across at least 3 different price ceilings" part of that
+criterion is additionally checked directly against `tools.py::search_listings`
+below, since `search_listings` is deterministic and reruns of one query
+through `run_eval` can't exercise more than one ceiling value.
+
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Full three-tool run returns a fit card | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. Empty search stops before tool 2 | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. Item in session matches item passed on | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card mentions price/platform, 2-4 sentences | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. Price ceiling respected | 5 of 5 (≥3 ceilings) | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
-**Real output from one try**, pasted as text, naming the file and function
-that produced it:
+**Real output, one try per criterion, as text:**
+
+**Criterion 1** — `agent.py::run_agent`, Try 1, query `"vintage graphic tee under $30"`:
 
 ```
+[1] search_listings (via MCP)
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+[2] suggest_outfit
+      out: Here are two specific outfit ideas using the new Y2K butterfly baby tee and pieces from your existing wardrobe…
+[3] create_fit_card
+      out: Scored the ultimate Y2K butterfly baby tee on depop for just $18.0! It's giving total early 2000s mall rat ene…
+
+Fit card: Scored the ultimate Y2K butterfly baby tee on depop for just $18.0! It's giving total early 2000s mall rat energy, and I am so ready to live out my pop princess dreams.
+```
+
+**Criterion 2** — `agent.py::run_agent`, Try 1, query `"designer ballgown size XXS under $5"`:
 
 ```
+[1] search_listings (via MCP)
+      out: [] (empty)
+[2] branch
+      →    search_results empty — stopping before suggest_outfit
+
+stopped early: yes — No listings matched — try raising max_price or dropping the size filter.
+selected_item: (none)
+search_results: 0
+```
+
+**Criterion 3** — `agent.py::run_agent` + `tools.py::suggest_outfit`. `run_eval.py` doesn't instrument what `suggest_outfit` actually receives, so this was checked directly with a spy standing in for `suggest_outfit`, 5 separate tries, query `"90s track jacket in size M"`:
+
+```
+try 1: session.selected_item.id='lst_004'  suggest_outfit received='lst_004'  SAME=True
+try 2: session.selected_item.id='lst_004'  suggest_outfit received='lst_004'  SAME=True
+try 3: session.selected_item.id='lst_004'  suggest_outfit received='lst_004'  SAME=True
+try 4: session.selected_item.id='lst_004'  suggest_outfit received='lst_004'  SAME=True
+try 5: session.selected_item.id='lst_004'  suggest_outfit received='lst_004'  SAME=True
+```
+
+**Criterion 4** — `tools.py::create_fit_card`, all 5 tries on the same item (`Y2K Baby Tee — Butterfly Print`, $18.0, depop), caching off:
+
+```
+Try 1: Scored the ultimate Y2K butterfly baby tee on depop for just $18.0! It's giving total early 2000s mall rat energy, and I am so ready to live out my pop princess dreams.
+Try 2: Found the ultimate Y2K butterfly baby tee on depop for just $18.0, and I am obsessed with the nostalgic early-2000s mall-goth energy it brings to my closet. It's giving major 2004 pop-star-off-duty vibes when paired with baggy jeans and chunky sneakers. Can't wait to wear this tiny top on repeat all season!
+Try 3: Scored this butterfly print Y2K baby tee on depop for just $18.0, and I am officially leaning all the way into the early-2000s off-duty model aesthetic. It fits like an absolute dream and goes with everything from baggy denim to utilitarian trousers. Trust me, you'll be seeing this in every mirror selfie for the foreseeable future.
+Try 4: Found this exact Y2K baby tee with the cutest butterfly print scrolling on Depop for just $18. Honestly living out my early 2000s pop star dreams with how fitted and nostalgic it is. Going to style it with baggy low-rise denim and chunky sneakers for the ultimate casual street vibe.
+Try 5: Score! Found this adorable butterfly print Y2K baby tee on depop for just $18.0, and it is giving major 2000s mall-rat energy. Can't wait to style it with baggy low-rise jeans and chunky sneakers for the ultimate nostalgic streetwear fit.
+```
+
+Every try names the price ($18/$18.0) and the platform (depop/Depop) and runs
+2-3 sentences — within the 2-to-4 range — while the wording differs each time.
+
+**Criterion 5** — `tools.py::search_listings`, direct calls (no model), 5 different price ceilings:
+
+```
+max_price=15   query='tee'        -> 1 results, prices=[15.0],             all <= ceiling: True
+max_price=28   query='hoodie'     -> 1 results, prices=[26.0],             all <= ceiling: True
+max_price=35   query='dress'      -> 1 results, prices=[30.0],             all <= ceiling: True
+max_price=40   query='jeans'      -> 3 results, prices=[38.0, 36.0, 30.0], all <= ceiling: True
+max_price=60   query='sneakers'   -> 2 results, prices=[48.0, 20.0],       all <= ceiling: True
+```
+
+Plus one full-loop confirmation, `agent.py::run_agent`, query `"jeans under $40"`,
+all 5 tries: `search_results: 3`, `selected_item: Vintage Levi's 501 Jeans — Medium Wash ($38.0, depop)` — consistent with the direct check above.
 
 ---
 

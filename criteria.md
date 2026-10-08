@@ -65,17 +65,27 @@ result), so 4 of 5 would just be hiding a real defect behind a passing grade.
 
 ## 4. Something about the fit card
 
-For 5 different items run through `create_fit_card`, every resulting caption
+For the same item run through `create_fit_card` five separate times, with
+caching off so each try is a real generation, every resulting caption
 mentions the item's price and its platform at least once each, and is 2 to 4
 sentences long — in 5 of 5 tries. The wording itself is allowed to differ
 every time.
 
 **Why this target:** Wording is supposed to vary — that's `TEMPERATURE` doing
-its job, and word-for-word identical output across different items would
-actually be the failure mode. But mentioning price, mentioning platform, and
-staying within a sentence range are instructions I give the model in the
-prompt, not creative choices I'm leaving up to it, so I expect the model to
-follow them every time, not just most of the time.
+its job, and five word-for-word identical captions would actually be the
+failure mode (the cache serving a stored answer instead of generating a new
+one). But mentioning price, mentioning platform, and staying within a
+sentence range are instructions I give the model in the prompt, not creative
+choices I'm leaving up to it, so I expect the model to follow them every
+time, not just most of the time.
+
+> **Revised before running (unit 4, Milestone 3):** Originally written as "5
+> different items." Changed to "the same item, 5 separate generations"
+> because that's what the test harness (`run_eval.py`) actually produces —
+> it reruns one scenario N times, it doesn't run N different scenarios as
+> one criterion. Testing repeated generations of one item is still a fair
+> test of whether the model reliably follows the prompt's structural
+> instructions; it just fits the tool that measures it.
 
 ---
 

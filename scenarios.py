@@ -35,18 +35,41 @@ SCENARIOS = [
         "wardrobe": "empty",
         "criterion": None,
     },
-    # TODO: add what your criteria 3, 4 and 5 need.
-    #
-    # Set "criterion" to the number in criteria.md that the scenario tests.
-    # "criterion": None means a diagnostic run — useful to have, but it isn't
-    # one of your five, and run_eval.py marks it as such in the table.
-    #
-    # For a state criterion, any normal query works — what you're checking is
-    # what ends up in the session, not what the user typed.
-    #
-    # For a fit-card criterion, you probably want the SAME query listed more
-    # than once, or several different items, depending on what your criterion
-    # actually says.
+    {
+        # State: does session["selected_item"] stay the one thing that
+        # reaches suggest_outfit and create_fit_card. Any matching query
+        # works here — what's being checked is what ends up in the session,
+        # not what the user typed. Criterion 3.
+        "name": "state: selected item consistent",
+        "query": "90s track jacket in size M",
+        "wardrobe": "example",
+        "criterion": 3,
+    },
+    {
+        # Fit card structure: same item, regenerated five separate times
+        # with caching off, so wording differs each try but the structural
+        # requirements (price, platform, 2-4 sentences) should hold every
+        # time regardless. Criterion 4.
+        "name": "fit card mentions price, platform, stays 2-4 sentences",
+        "query": "vintage graphic tee under $30",
+        "wardrobe": "example",
+        "criterion": 4,
+    },
+    {
+        # Price ceiling respected, full loop. Criterion 5. search_listings is
+        # deterministic, so 5 reruns of one query are 5 identical checks of
+        # the <= comparison, not 5 independent ones — the "at least 3
+        # different price ceilings" part of this criterion is additionally
+        # verified with a direct, model-free call to search_listings at five
+        # ceilings (tee<=15, hoodie<=28, dress<=35, jeans<=40, sneakers<=60),
+        # pasted as real output under this criterion in the README. This
+        # scenario exists so the claim also holds through the full agent
+        # loop, not only when the tool is called directly.
+        "name": "price ceiling respected, full loop",
+        "query": "jeans under $40",
+        "wardrobe": "example",
+        "criterion": 5,
+    },
 ]
 
 WARDROBES = ("example", "empty")
